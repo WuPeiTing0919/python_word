@@ -1,25 +1,28 @@
-from fastapi import FastAPI
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, Request
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from docx import Document
-import io
+import uuid
+import os
 
 app = FastAPI()
+
+# 掛載 static 目錄為公開目錄
+os.makedirs("static", exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 class TextRequest(BaseModel):
     content: str
 
 @app.post("/generate-doc")
-def generate_doc(data: TextRequest):
+def generate_doc(data: TextRequest, request: Request):  # 👈 加入 request
     doc = Document()
     doc.add_paragraph(data.content)
 
-    buffer = io.BytesIO()
-    doc.save(buffer)
-    buffer.seek(0)
+    filename = f"{uuid.uuid4()}.docx"
+    filepath = os.path.join("static", filename)
+    doc.save(filepath)
 
-    return StreamingResponse(
-        buffer,
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={"Content-Disposition": f"attachment; filename=generated.docx"}
-    )
+    return {
+        "url": str(request.base_url) + f"static/{filename}"
+    }
